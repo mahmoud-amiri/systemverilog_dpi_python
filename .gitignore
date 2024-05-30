@@ -7,3 +7,6 @@ JSONParser_example/modelsim.ini
 fileIO_example/work
 fileIO_example/transcript
 fileIO_example/modelsim.ini
+server_example/work
+server_example/transcript
+server_example/modelsim.ini

@@ -22,20 +22,14 @@ WSADATA wsaData;
 
 int server_socket, client_socket;
 struct sockaddr_in server_addr, client_addr;
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 void start_server(int port);
 void stop_server();
-void send_data(const struct json_object *data);
-void receive_data(struct json_object **data);
+void send_data(const cJSON *data);
+void receive_data(cJSON **data);
 int handshake();
-void send_large_data(const struct json_object *data);
-struct json_object* receive_large_data(int max_attempts);
-#ifdef __cplusplus
-}
-#endif
+void send_large_data(const cJSON *data);
+cJSON* receive_large_data(int max_attempts);
 
 void start_server(int port) {
 #ifdef _WIN32
@@ -72,13 +66,6 @@ void start_server(int port) {
         exit(EXIT_FAILURE);
     }
 
-    if (handshake()) {
-        printf("Handshake successful, connection is OK\n");
-        // communicate();
-    } else {
-        printf("Handshake failed\n");
-        stop_server();
-    }
 }
 
 void stop_server() {
@@ -94,17 +81,18 @@ void stop_server() {
     //exit(EXIT_SUCCESS);
 }
 
-void send_data(const struct json_object *data) {
-    const char *serialized_data = json_object_to_json_string_ext(data, JSON_C_TO_STRING_PLAIN);
+void send_data(const cJSON *data) {
+    char *serialized_data = cJSON_PrintUnformatted(data);
     char buffer[CHUNK_SIZE];
     snprintf(buffer, sizeof(buffer), "%s\n", serialized_data);
     if (send(client_socket, buffer, strlen(buffer), 0) < 0) {
         perror("Send failed");
         stop_server();
     }
+    free(serialized_data);
 }
 
-void receive_data(struct json_object **data) {
+void receive_data(cJSON **data) {
     char buffer[CHUNK_SIZE];
     int bytes_received = recv(client_socket, buffer, CHUNK_SIZE - 1, 0);
     if (bytes_received < 0) {
@@ -113,7 +101,7 @@ void receive_data(struct json_object **data) {
     }
     buffer[bytes_received] = '\0';
     printf("receive_data = %s\n", buffer);
-    struct json_object *parsed_json = json_tokener_parse(buffer);
+    cJSON *parsed_json = cJSON_Parse(buffer);
     if (parsed_json == NULL) {
         fprintf(stderr, "Failed to parse JSON\n");
         stop_server();
@@ -148,8 +136,8 @@ int handshake() {
     return 0;
 }
 
-void send_large_data(const struct json_object *data) {
-    const char *serialized_data = json_object_to_json_string_ext(data, JSON_C_TO_STRING_PLAIN);
+void send_large_data(const cJSON *data) {
+    char *serialized_data = cJSON_PrintUnformatted(data);
     int data_len = strlen(serialized_data);
     int num_chunks = (int)ceil((double)data_len / CHUNK_SIZE);
     
@@ -158,74 +146,83 @@ void send_large_data(const struct json_object *data) {
         int end_idx = start_idx + CHUNK_SIZE;
         if (end_idx > data_len) end_idx = data_len;
 
-        struct json_object *chunk_obj = json_object_new_object();
-        json_object_object_add(chunk_obj, "chunk", json_object_new_string_len(serialized_data + start_idx, end_idx - start_idx));
-        json_object_object_add(chunk_obj, "index", json_object_new_int(i));
-        json_object_object_add(chunk_obj, "total", json_object_new_int(num_chunks));
+        cJSON *chunk_obj = cJSON_CreateObject();
+        cJSON_AddItemToObject(chunk_obj, "chunk", cJSON_CreateString(serialized_data + start_idx));  // Adjusted for chunked data
+        cJSON_AddNumberToObject(chunk_obj, "index", i);
+        cJSON_AddNumberToObject(chunk_obj, "total", num_chunks);
 
-        send_data(json_object_to_json_string_ext(chunk_obj, JSON_C_TO_STRING_PLAIN));
+        send_data(chunk_obj);
         printf("Chunk number %d sent\n", i);
 
-        char *response;
+        cJSON *response;
         receive_data(&response);
-        printf("Server answered: %s\n", response);
-        free(response);
+        printf("Server answered: %s\n", cJSON_Print(response));
+        cJSON_Delete(response);
 
-        json_object_put(chunk_obj);
+        cJSON_Delete(chunk_obj);
     }
+    free(serialized_data);
 }
 
-struct json_object* receive_large_data(int max_attempts) {
-    struct json_object *partial_data_obj = json_object_new_array();
+cJSON* receive_large_data(int max_attempts) {
+    cJSON *partial_data_obj = cJSON_CreateArray();
     int attempts = 0;
 
     while (attempts < max_attempts) {
         printf("Attempts: %d\n", attempts);
-        char *chunk_str;
-        receive_data(&chunk_str);
-        if (chunk_str) {
-            struct json_object *chunk_obj = json_tokener_parse(chunk_str);
-            free(chunk_str);
+        cJSON *chunk_obj;
+        receive_data(&chunk_obj);
+        if (chunk_obj) {
+            const char *chunk_data = cJSON_GetObjectItem(chunk_obj, "chunk")->valuestring;
+            int index = cJSON_GetObjectItem(chunk_obj, "index")->valueint;
+            int total = cJSON_GetObjectItem(chunk_obj, "total")->valueint;
 
-            if (chunk_obj) {
-                const char *chunk_data = json_object_get_string(json_object_object_get(chunk_obj, "chunk"));
-                int index = json_object_get_int(json_object_object_get(chunk_obj, "index"));
-                int total = json_object_get_int(json_object_object_get(chunk_obj, "total"));
+            cJSON_InsertItemInArray(partial_data_obj, index, cJSON_CreateString(chunk_data));
+            cJSON_Delete(chunk_obj);
 
-                json_object_array_put_idx(partial_data_obj, index, json_object_new_string(chunk_data));
-                json_object_put(chunk_obj);
+            cJSON *response_obj = cJSON_CreateObject();
+            cJSON_AddStringToObject(response_obj, "data", chunk_data);
+            cJSON_AddStringToObject(response_obj, "message", "Chunk received successfully");
+            send_data(response_obj);
+            cJSON_Delete(response_obj);
 
-                struct json_object *response_obj = json_object_new_object();
-                json_object_object_add(response_obj, "data", json_object_new_string_len(chunk_data, strlen(chunk_data)));
-                json_object_object_add(response_obj, "message", json_object_new_string("Chunk received successfully"));
-                send_data(json_object_to_json_string_ext(response_obj, JSON_C_TO_STRING_PLAIN));
-                json_object_put(response_obj);
-
-                printf("Index = %d / Total = %d\n", index, total - 1);
-                if (index + 1 == total) {
-                    printf("Last chunk received\n");
-                    const char *complete_data = json_object_to_json_string_ext(partial_data_obj, JSON_C_TO_STRING_PLAIN);
-                    struct json_object *result = json_tokener_parse(complete_data);
-                    json_object_put(partial_data_obj);
-                    return result;
-                }
-            } else {
-                fprintf(stderr, "Failed to parse chunk\n");
-                json_object_put(partial_data_obj);
-                return NULL;
+            printf("Index = %d / Total = %d\n", index, total - 1);
+            if (index + 1 == total) {
+                printf("Last chunk received\n");
+                char *complete_data = cJSON_PrintUnformatted(partial_data_obj);
+                cJSON *result = cJSON_Parse(complete_data);
+                free(complete_data);
+                cJSON_Delete(partial_data_obj);
+                return result;
             }
+        } else {
+            fprintf(stderr, "Failed to parse chunk\n");
+            cJSON_Delete(partial_data_obj);
+            return NULL;
         }
         attempts++;
     }
-    json_object_put(partial_data_obj);
+    cJSON_Delete(partial_data_obj);
     return NULL;
 }
+
 int main() {
     int port = 8080; // Set your desired port number
     start_server(port);
 
     if (handshake()) {
         printf("Handshake successful\n");
+
+        // Example to receive large data
+        cJSON *received_data = receive_large_data(10);
+        printf("Received large data: %s\n", cJSON_Print(received_data));
+        cJSON_Delete(received_data);
+
+        // Example data to send
+        cJSON *data = cJSON_CreateObject();
+        cJSON_AddStringToObject(data, "key", "value");
+        send_large_data(data);
+        cJSON_Delete(data);
     } else {
         printf("Handshake failed\n");
     }
@@ -233,3 +230,64 @@ int main() {
     stop_server();
     return 0;
 }
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+__declspec(dllexport) void sv_start_server(int port) {
+    start_server(port);
+}
+
+__declspec(dllexport) void sv_stop_server() {
+    stop_server();
+}
+
+__declspec(dllexport) int sv_handshake() {
+    return handshake();
+}
+
+__declspec(dllexport) void sv_send_data(const char *json_str) {
+    cJSON *data = cJSON_Parse(json_str);
+    if (data != NULL) {
+        send_data(data);
+        cJSON_Delete(data);
+    } else {
+        fprintf(stderr, "Invalid JSON data\n");
+    }
+}
+
+__declspec(dllexport) char* sv_receive_data() {
+    cJSON *data;
+    receive_data(&data);
+    if (data != NULL) {
+        char *result = cJSON_PrintUnformatted(data);
+        cJSON_Delete(data);
+        return result;
+    }
+    return NULL;
+}
+
+__declspec(dllexport) void sv_send_large_data(const char *json_str) {
+    cJSON *data = cJSON_Parse(json_str);
+    if (data != NULL) {
+        send_large_data(data);
+        cJSON_Delete(data);
+    } else {
+        fprintf(stderr, "Invalid JSON data\n");
+    }
+}
+
+__declspec(dllexport) char* sv_receive_large_data(int max_attempts) {
+    cJSON *data = receive_large_data(max_attempts);
+    if (data != NULL) {
+        char *result = cJSON_PrintUnformatted(data);
+        cJSON_Delete(data);
+        return result;
+    }
+    return NULL;
+}
+
+#ifdef __cplusplus
+}
+#endif
