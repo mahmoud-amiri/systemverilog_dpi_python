@@ -1,4 +1,4 @@
-module test_JSONParser;
+module top;
     // Import the package
     import JSONParser_pkg::*;
 
@@ -8,6 +8,8 @@ module test_JSONParser;
     string assoc[string] ;
     string result_json;
     string key; // Declare key outside of foreach
+    typedef string json_assoc_t[string];
+    json_assoc_t internal_assoc;
 
     // Initial block for test
     initial begin
@@ -20,10 +22,10 @@ module test_JSONParser;
 
         // Display the parsed associative array
         $display("Test 1: Parsing JSON to Associative Array");
-        $display(assoc);
-        // foreach (key in assoc) begin
-        //     $display("Key: %s, Value: %s", key, assoc[key]);
-        // end
+        // $display(assoc);
+        foreach (assoc[key]) begin
+            $display("Key: %s, Value: %s", key, assoc[key]);
+        end
 
         // Test 2: Convert associative array back to JSON string
         result_json = parser.assoc_to_json(assoc);
@@ -32,7 +34,7 @@ module test_JSONParser;
 
         // Test 3: Set and Get internal associative array
         parser.set_assoc(assoc);
-        string[string] internal_assoc;
+        
         internal_assoc = parser.get_assoc();
 
         // Display the internal associative array
