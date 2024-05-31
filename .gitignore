@@ -10,3 +10,10 @@ fileIO_example/modelsim.ini
 server_example/work
 server_example/transcript
 server_example/modelsim.ini
+api_example/work
+api_example/transcript
+api_example/modelsim.ini
+server_example_file_port/work
+server_example_file_port/transcript
+server_example_file_port/modelsim.ini
+dpi/__pycache__
