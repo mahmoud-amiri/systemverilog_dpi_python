@@ -24,8 +24,8 @@ module top;
 
         parser = new();
         assoc = parser.parse_json(content);
-        port = assoc["port"].atoi();//8081;
-        
+        port = assoc["port_A"].atoi();//8081;
+
         srv = new(port);
         srv.start();
         received_data = srv.receive_large(10);

@@ -8,7 +8,7 @@ package JSONParser_pkg;
             string temp;
             int i;
             for (i = 0; i < str.len(); i++) begin
-                if (str[i] != " " && str[i] != "\n" && str[i] != "\t" && str[i] != "\r") begin
+                if (str[i] != " " && str[i] != "\n" && str[i] != "\t" && str[i] != "\r\n") begin
                     temp = {temp, str[i]};
                 end
             end
