@@ -21,14 +21,14 @@ package FileIO_pkg;
         function string read_line();
             string line;
             if (!$feof(file_handle)) begin
-            if ($fgets(line, file_handle)) begin
-                return line;
+                if ($fgets(line, file_handle)) begin
+                    return line;
+                end else begin
+                    $display("Error: Failed to read line!");
+                    return "";
+                end
             end else begin
-                $display("Error: Failed to read line!");
                 return "";
-            end
-            end else begin
-            return "";
             end
         endfunction
 
@@ -48,6 +48,26 @@ package FileIO_pkg;
             file_handle = 0;
             end else begin
             $display("Error: File is not open!");
+            end
+        endfunction
+
+        function string read_file();
+            string line;
+            string content;
+            line = "A";
+            content = "";
+            if (!$feof(file_handle)) begin
+                while (line != "") begin
+                    if ($fgets(line, file_handle)) begin
+                        content = {content, line};
+                    end else begin
+                        $display("Error: Failed to read line!");
+                        return content;
+                    end
+                end
+                return content;
+            end else begin
+                return content;
             end
         endfunction
 
