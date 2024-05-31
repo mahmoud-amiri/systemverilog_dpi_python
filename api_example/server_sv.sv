@@ -5,7 +5,7 @@ module top;
     ServerAPI srv;
 
     json_assoc_t received_data;
-    string data_to_send;
+    json_assoc_t data_to_send;
     string content;
     int port;
     // typedef string json_assoc_t[string];
@@ -21,7 +21,7 @@ module top;
         $display("received_data :");
         $display(received_data);
 
-        data_to_send = "{\"key\": \"value\"}";
+        data_to_send = {"frame": "10", "x" : "12", "y" : "25", "value" : "154", "A":"B"};
         srv.send(data_to_send);
 
         srv.stop();

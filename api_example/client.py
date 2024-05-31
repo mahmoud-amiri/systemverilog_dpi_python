@@ -86,7 +86,9 @@ def receive_data(client_socket):
     return json.loads(buffer.decode())
 
 def send_large_data(client_socket, data):
+    print(f"send_large_data :{data}")
     serialized_data = json.dumps(data)
+    print(serialized_data)
     data_len = len(serialized_data)
     chunk_size = 4096
     num_chunks = (data_len + chunk_size - 1) // chunk_size  # ceil(data_len / chunk_size)
@@ -95,7 +97,9 @@ def send_large_data(client_socket, data):
         start_idx = i * chunk_size
         end_idx = min(start_idx + chunk_size, data_len)
         chunk = serialized_data[start_idx:end_idx]
+        print(chunk)
         chunk = escape_json_characters(chunk)
+        print(chunk)
         chunk_obj = {
             "chunk": chunk,
             "index": i,
@@ -139,7 +143,7 @@ def main():
         print("Handshake successful")
 
         # Example data to send
-        data = {"key": "value"}
+        data = {"frame": "10", "x" : "12", "y" : "25", "value" : "154", "A":"B"}
         send_large_data(client_socket, data)
 
         # Example to receive data
