@@ -12,6 +12,7 @@ set srcdir ../dpi
 # Compile the package first
 vlog -sv $srcdir/server_pkg.sv
 vlog -sv $srcdir/FileIO_pkg.sv
+vlog -sv $srcdir/JSONParser_pkg.sv
 
 # Compile the SystemVerilog files
 vlog -sv ./server_sv.sv
